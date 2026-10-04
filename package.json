@@ -9,12 +9,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "ingest": "node src/jobs/ingest.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.23.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "csv-parse": "^7.0.3",
+    "pg": "^8.23.1"
   }
 }
