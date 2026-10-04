@@ -22,11 +22,15 @@ charges to see the rest. Sponsa does not.
 
 ## How it works
 
-1. A daily job downloads the register from gov.uk and updates the `sponsors` table.
-2. A discovery job guesses job board addresses from sponsor names and probes three
-   providers to find which ones exist.
-3. A nightly job reads every job board that was found and records the open roles.
-4. A website serves the result, with one indexable page per sponsor and per role category.
+One nightly chain runs four steps in order.
+
+1. An ingest step downloads the register from gov.uk and updates the `sponsors` table.
+2. A discovery step guesses job board addresses from sponsor names and probes three
+   providers to find which ones exist. A weak guess waits for a person to confirm it.
+3. A re-crawl step reads every confirmed job board and records the open roles.
+4. A publish step writes the nightly public dump and rebuilds the website.
+
+The website reads no database at request time. It is built once a night.
 
 Read [docs/design.md](./docs/design.md) for the detail.
 
@@ -42,9 +46,10 @@ Every part has a free tier, and nothing in this stack can produce a bill.
 ## Repository layout
 
 ```
-CONTEXT.md        the project vocabulary; read this before writing code
-docs/design.md    the settled design
-docs/adr/         architecture decisions, numbered, with the reasoning
+CONTEXT.md                 the project vocabulary. Read this before writing code
+docs/design.md             the settled design
+docs/adr/                  architecture decisions, numbered, with the reasoning
+data/match-decisions.csv   every sponsor to job board link a person decided by hand
 ```
 
 ## Attribution
