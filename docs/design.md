@@ -21,9 +21,16 @@ Organisation Name, Town/City, County, Type & Rating, Route
 
 Facts that shape the design:
 
-- The 2026-10-02 file has 143,138 rows but only 127,698 unique organisation names,
-  because each row is one sponsor and route pair. It holds 128,143 unique name, town and
-  county triples, so 445 names sit in more than one place.
+- The 2026-10-02 file has 143,138 rows, because each row is one sponsor and route pair.
+  After trimming it holds 127,606 unique organisation names and 127,930 unique name and
+  town pairs, so 324 names sit in more than one town.
+- It holds 128,062 unique name, town and county triples, which is more than the 127,930
+  pairs. 132 name and town pairs carry two different counties in the same file, such as
+  an empty county against `Scotland`, and `West Yorkshire` against `West yorkshire`. The
+  county is therefore unreliable and it is data, never part of a key.
+- Normalising the case, the punctuation and the legal suffix reduces the 127,930 pairs to
+  127,395. The 534 merges are the same entity written two ways, such as
+  `C. BECHSTEIN HALL LIMITED` and `C. Bechstein Hall LIMITED`.
 - The download URL is date-stamped and changes on every release. There is no stable
   latest URL. The ingest job reads the current link from the gov.uk content API. See
   [ADR 0008](./adr/0008-read-the-csv-link-from-the-govuk-content-api.md).
@@ -85,8 +92,9 @@ sponsors as unlisted in one run.
 
 Step 5 needs a rule, because the register publishes no rename event. Sponsa pairs a
 disappeared sponsor with a new sponsor only when both share a town and the names are
-close above a high similarity threshold. The county is empty on 66 percent of the rows,
-so the rule compares the county only when both rows carry one. If two or more candidates compete,
+close above a high similarity threshold. The rule ignores the county, because the county
+is empty on 66 percent of the rows and it disagrees with itself on 132 name and town
+pairs. If two or more candidates compete,
 Sponsa pairs nothing and writes the case to the review queue. Below the threshold, Sponsa
 records one unlisted sponsor and one new sponsor, which is the honest reading.
 
@@ -205,6 +213,8 @@ crawl_runs        id, kind, started_at, ended_at, is_bootstrap, boards_touched,
 
 Why each table and column exists:
 
+- `sponsors.identity_key` is the normalised name joined to the normalised town. It omits
+  the county on the evidence above.
 - `sponsors` and `brands` are separate because a licence belongs to a legal entity and a
   board belongs to a public brand. See
   [ADR 0003](./adr/0003-sponsors-and-brands-are-separate-tables.md).
