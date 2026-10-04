@@ -49,3 +49,8 @@ create table sponsor_routes (
   rating text not null,
   primary key (sponsor_id, route, rating)
 );
+
+alter table crawl_runs enable row level security;
+alter table sponsors enable row level security;
+alter table sponsor_names enable row level security;
+alter table sponsor_routes enable row level security;

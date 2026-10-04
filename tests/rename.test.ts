@@ -10,7 +10,18 @@ describe('decideRename', () => {
   });
 
   it('pairs nothing below the threshold', () => {
-    expect(decideRename([{ sponsorId: 7, similarity: 0.89 }])).toEqual({ kind: 'none' });
+    expect(decideRename([{ sponsorId: 7, similarity: 0.84 }])).toEqual({ kind: 'none' });
+  });
+
+  it('pairs a one-letter rename, which pg_trgm scores 0.875', () => {
+    expect(decideRename([{ sponsorId: 7, similarity: 0.875 }])).toEqual({
+      kind: 'paired',
+      sponsorId: 7,
+    });
+  });
+
+  it('refuses the worst measured false pair, which scores 0.808', () => {
+    expect(decideRename([{ sponsorId: 7, similarity: 0.808 }])).toEqual({ kind: 'none' });
   });
 
   it('pairs nothing with no candidate', () => {

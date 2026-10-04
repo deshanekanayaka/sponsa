@@ -1,4 +1,4 @@
-export const SIMILARITY_THRESHOLD = 0.9;
+export const SIMILARITY_THRESHOLD = 0.85;
 
 export type RenameCandidate = {
   readonly sponsorId: number;
