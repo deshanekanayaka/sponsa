@@ -16,7 +16,8 @@ import {
 import { mintSlug } from '../lib/slug.ts';
 
 const MIN_ROW_FRACTION = 0.9;
-const BATCH_SIZE = 1000;
+
+const MAX_PARAMETERS_PER_STATEMENT = 60000;
 
 const USER_AGENT =
   'Sponsa/0.1 (+https://github.com/deshanekanayaka/sponsa; thariduek22@gmail.com)';
@@ -52,10 +53,11 @@ async function insertBatched(
   values: readonly unknown[],
 ): Promise<void> {
   const rows = values.length / columns;
-  for (let start = 0; start < rows; start += BATCH_SIZE) {
+  const batchSize = Math.floor(MAX_PARAMETERS_PER_STATEMENT / columns);
+  for (let start = 0; start < rows; start += batchSize) {
     const slice = values.slice(
       start * columns,
-      Math.min(start + BATCH_SIZE, rows) * columns,
+      Math.min(start + batchSize, rows) * columns,
     );
     const tuples: string[] = [];
     for (let i = 0; i < slice.length / columns; i += 1) {
@@ -257,6 +259,13 @@ async function run(): Promise<void> {
     renamesAmbiguous: 0,
   };
 
+  let mark = Date.now();
+  const phase = (name: string): void => {
+    const now = Date.now();
+    console.log(`phase ${name} ${((now - mark) / 1000).toFixed(1)}s`);
+    mark = now;
+  };
+
   try {
     const { rows: lastRows } = await client.query<{ rows_read: number | null }>(
       `select rows_read from crawl_runs
@@ -269,6 +278,7 @@ async function run(): Promise<void> {
 
     const parsed = await parseRegister(await openRegister());
     counts.rowsRead = parsed.rowCount;
+    phase('parse');
 
     if (previousRows !== null && parsed.rowCount < previousRows * MIN_ROW_FRACTION) {
       throw new Error(
@@ -278,35 +288,42 @@ async function run(): Promise<void> {
 
     await client.query('begin');
     await stage(client, parsed.sponsors);
+    phase('stage');
 
     const renames = await pairRenames(client, today);
     counts.sponsorsRenamed = renames.renamed;
     counts.renamesAmbiguous = renames.ambiguous;
+    phase('renames');
 
     counts.sponsorsInserted = await insertNewSponsors(client, today, isBootstrap);
+    phase('insert-new');
 
     await client.query(
       `update sponsors
-       set last_seen = $1, unlisted_at = null, county = s.county, name = s.name
+       set last_seen = $1, county = s.county, name = s.name
        from staging_sponsors s
        where sponsors.identity_key = s.identity_key`,
       [today],
     );
+    phase('update-seen');
 
     await client.query(
-      `insert into sponsor_names (sponsor_id, name, first_seen, last_seen)
-       select sp.id, sp.name, $1, $1 from sponsors sp
+      `update sponsors
+       set unlisted_at = null
+       from staging_sponsors s
+       where sponsors.identity_key = s.identity_key and sponsors.unlisted_at is not null`,
+    );
+    phase('relist');
+
+    await client.query(
+      `insert into sponsor_names (sponsor_id, name, first_seen)
+       select sp.id, sp.name, $1 from sponsors sp
        join staging_sponsors s on s.identity_key = sp.identity_key
-       on conflict (sponsor_id, name) do update set last_seen = excluded.last_seen`,
+       on conflict (sponsor_id, name) do nothing`,
       [today],
     );
+    phase('names');
 
-    await client.query(
-      `delete from sponsor_routes r
-       using sponsors sp
-       where r.sponsor_id = sp.id
-         and exists (select 1 from staging_sponsors s where s.identity_key = sp.identity_key)`,
-    );
     await client.query(
       `insert into sponsor_routes (sponsor_id, route, rating)
        select sp.id, t.route, t.rating
@@ -314,6 +331,18 @@ async function run(): Promise<void> {
        join sponsors sp on sp.identity_key = t.identity_key
        on conflict do nothing`,
     );
+    await client.query(
+      `delete from sponsor_routes r
+       using sponsors sp
+       where r.sponsor_id = sp.id
+         and exists (select 1 from staging_sponsors s where s.identity_key = sp.identity_key)
+         and not exists (
+           select 1 from staging_routes t
+           where t.identity_key = sp.identity_key
+             and t.route = r.route and t.rating = r.rating
+         )`,
+    );
+    phase('routes');
 
     const { rowCount: unlisted } = await client.query(
       `update sponsors
@@ -323,8 +352,10 @@ async function run(): Promise<void> {
       [today],
     );
     counts.sponsorsUnlisted = unlisted ?? 0;
+    phase('unlist');
 
     await client.query('commit');
+    phase('commit');
 
     await client.query(
       `update crawl_runs

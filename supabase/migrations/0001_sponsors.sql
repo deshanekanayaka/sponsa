@@ -29,17 +29,16 @@ create table sponsors (
   first_seen date not null,
   last_seen date not null,
   unlisted_at date
-);
+) with (fillfactor = 80);
 
 create index sponsors_town_norm on sponsors (town_norm);
-create index sponsors_unlisted_at on sponsors (unlisted_at);
+create index sponsors_unlisted_at on sponsors (unlisted_at) where unlisted_at is not null;
 create index sponsors_norm_name_trgm on sponsors using gin (norm_name gin_trgm_ops);
 
 create table sponsor_names (
   sponsor_id bigint not null references sponsors (id) on delete cascade,
   name text not null,
   first_seen date not null,
-  last_seen date not null,
   primary key (sponsor_id, name)
 );
 

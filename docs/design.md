@@ -198,7 +198,7 @@ Out of scope.
 ```
 sponsors          id, name, slug, town, county, identity_key, first_seen, last_seen,
                   unlisted_at
-sponsor_names     sponsor_id, name, first_seen, last_seen
+sponsor_names     sponsor_id, name, first_seen
 sponsor_routes    sponsor_id, route, rating
 candidates        sponsor_id, provider, slug, last_probed_at, result
 brands            id, provider, slug, last_crawled_at, last_ok_at, listings_at_last_ok,
@@ -221,7 +221,19 @@ Why each table and column exists:
 - `sponsors.slug` is stored because it is minted once and never changes. A collision
   between two sponsors of the same name adds the town.
 - `sponsor_names` carries every name a sponsor has held. It makes renames detectable and
-  it makes a hand written decision survive one.
+  it makes a hand written decision survive one. It holds no `last_seen`, because a former
+  name ends where the next name's `first_seen` begins, and a nightly `last_seen` write
+  would rewrite all 127,410 rows to record nothing.
+- `sponsors` is created with `fillfactor = 80`. The nightly run updates `last_seen` on
+  every present sponsor, and the spare page space lets Postgres update the row in place
+  without rewriting five index entries. Measured, this cut the statement from 21 seconds
+  to 7 and stopped the index bloat.
+- The index on `sponsors.unlisted_at` is partial, over the non-null rows only. Almost
+  every sponsor is listed, so the full index indexed 127,410 nulls to find a handful of
+  rows.
+- `sponsor_routes` is reconciled, not replaced. The nightly run inserts the routes that
+  are new and deletes the ones that are gone. Replacing the table rewrote 141,958 rows
+  every night to change nothing.
 - `candidates.result` holds hit, miss or blocked, and the three discovery tiers are one
   query over `last_probed_at`.
 - `brands.listings_at_last_ok` is the partial read guard. The three count columns rank the
