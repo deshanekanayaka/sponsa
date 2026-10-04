@@ -1,3 +1,4 @@
+import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import pg from 'pg';
 import { readEnv } from '../env.ts';
@@ -27,6 +28,15 @@ type Counts = {
   sponsorsRenamed: number;
   renamesAmbiguous: number;
 };
+
+async function openRegister(): Promise<AsyncIterable<Uint8Array>> {
+  const override = process.env['REGISTER_CSV']?.trim();
+  if (override) {
+    console.log(`reading the register from ${override} instead of gov.uk`);
+    return createReadStream(override);
+  }
+  return download(await findCsvUrl());
+}
 
 async function download(url: string): Promise<AsyncIterable<Uint8Array>> {
   const response = await fetch(url, { headers: { 'user-agent': USER_AGENT } });
@@ -257,8 +267,7 @@ async function run(): Promise<void> {
     const previousRows = lastRows[0]?.rows_read ?? null;
     const isBootstrap = previousRows === null;
 
-    const csvUrl = await findCsvUrl();
-    const parsed = await parseRegister(await download(csvUrl));
+    const parsed = await parseRegister(await openRegister());
     counts.rowsRead = parsed.rowCount;
 
     if (previousRows !== null && parsed.rowCount < previousRows * MIN_ROW_FRACTION) {

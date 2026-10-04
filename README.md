@@ -56,3 +56,20 @@ data/match-decisions.csv   every sponsor to job board link a person decided by h
 
 Sponsor data contains public sector information licensed under the
 [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+
+## Running the crawler
+
+The jobs read `SUPABASE_DB_URL` from the environment. Use the Supabase session or
+transaction pooler string, not the direct `db.<ref>.supabase.co` host, because that host
+resolves to IPv6 only and GitHub Actions runners have no IPv6 address.
+
+```
+npm run ingest
+```
+
+Set `REGISTER_CSV` to a local file path to read that file instead of downloading the
+register from gov.uk. The guards and the rename rule are tested that way.
+
+```
+REGISTER_CSV=/tmp/register.csv npm run ingest
+```
